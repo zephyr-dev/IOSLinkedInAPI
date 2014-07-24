@@ -22,6 +22,7 @@
 #import "LIALinkedInHttpClient.h"
 #import "LIALinkedInAuthorizationViewController.h"
 #import "NSString+LIAEncode.h"
+#import <AFNetworking.h>
 
 #define LINKEDIN_TOKEN_KEY          @"linkedin_token"
 #define LINKEDIN_EXPIRATION_KEY     @"linkedin_expiration"
@@ -30,6 +31,7 @@
 @interface LIALinkedInHttpClient ()
 @property(nonatomic, strong) LIALinkedInApplication *application;
 @property(nonatomic, weak) UIViewController *presentingViewController;
+@property(nonatomic, strong) NSURL *baseURL;
 @end
 
 @implementation LIALinkedInHttpClient
@@ -47,9 +49,8 @@
 
 
 - (id)initWithBaseURL:(NSURL *)url {
-  self = [super initWithBaseURL:url];
-  if (self) {
-    [self setResponseSerializer:[AFJSONResponseSerializer serializer]];
+  if(self = [super init]) {
+    self.baseURL = url;
   }
   return self;
 }
@@ -70,10 +71,12 @@
 }
 
 - (void)getAccessToken:(NSString *)authorizationCode success:(void (^)(NSDictionary *))success failure:(void (^)(NSError *))failure {
-  NSString *accessTokenUrl = @"/uas/oauth2/accessToken?grant_type=authorization_code&code=%@&redirect_uri=%@&client_id=%@&client_secret=%@";
-  NSString *url = [NSString stringWithFormat:accessTokenUrl, authorizationCode, [self.application.redirectURL LIAEncode], self.application.clientId, self.application.clientSecret];
+  NSString *accessTokenUrl = @"%@/uas/oauth2/accessToken?grant_type=authorization_code&code=%@&redirect_uri=%@&client_id=%@&client_secret=%@";
+  NSString *url = [NSString stringWithFormat:accessTokenUrl, self.baseURL.absoluteString, authorizationCode, [self.application.redirectURL LIAEncode], self.application.clientId, self.application.clientSecret];
 
-  [self POST:url parameters:nil success:^(AFHTTPRequestOperation *operation, id responseObject) {
+  NSURLRequest *request = [NSURLRequest requestWithURL:[NSURL URLWithString:url]];
+  AFJSONRequestOperation *operation = [AFJSONRequestOperation JSONRequestOperationWithRequest:request success:^(NSURLRequest *request, NSHTTPURLResponse *response, id JSON) {
+    id responseObject = JSON;
     NSString *accessToken = [responseObject objectForKey:@"access_token"];
     NSTimeInterval expiration = [[responseObject objectForKey:@"expires_in"] doubleValue];
 
@@ -86,34 +89,34 @@
     [userDefaults synchronize];
 
     success(responseObject);
-  }  failure:^(AFHTTPRequestOperation *operation, NSError *error) {
+  } failure:^(NSURLRequest *request, NSHTTPURLResponse *response, NSError *error, id JSON) {
     failure(error);
   }];
-
+  [operation start];
 }
 
 - (void)getAuthorizationCode:(void (^)(NSString *))success cancel:(void (^)(void))cancel failure:(void (^)(NSError *))failure {
   LIALinkedInAuthorizationViewController *authorizationViewController = [[LIALinkedInAuthorizationViewController alloc]
-      initWithApplication:
-          self.application
-                  success:^(NSString *code) {
-                    [self hideAuthenticateView];
-                    if (success) {
-                      success(code);
-                    }
-                  }
-                   cancel:^{
-                     [self hideAuthenticateView];
-                     if (cancel) {
-                       cancel();
-                     }
-                   } failure:^(NSError *error) {
-        [self hideAuthenticateView];
-        if (failure) {
-          failure(error);
-        }
-      }];
-  [self showAuthorizationView:authorizationViewController];
+    initWithApplication:
+    self.application
+    success:^(NSString *code) {
+      [self hideAuthenticateView];
+      if (success) {
+        success(code);
+      }
+    }
+cancel:^{
+  [self hideAuthenticateView];
+  if (cancel) {
+    cancel();
+  }
+       } failure:^(NSError *error) {
+         [self hideAuthenticateView];
+         if (failure) {
+           failure(error);
+         }
+       }];
+       [self showAuthorizationView:authorizationViewController];
 }
 
 - (void)showAuthorizationView:(LIALinkedInAuthorizationViewController *)authorizationViewController {
