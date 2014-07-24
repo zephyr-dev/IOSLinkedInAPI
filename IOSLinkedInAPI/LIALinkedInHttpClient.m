@@ -22,7 +22,7 @@
 #import "LIALinkedInHttpClient.h"
 #import "LIALinkedInAuthorizationViewController.h"
 #import "NSString+LIAEncode.h"
-#import <AFNetworking.h>
+#import <AFNetworking/AFJSONRequestOperation.h>
 
 #define LINKEDIN_TOKEN_KEY          @"linkedin_token"
 #define LINKEDIN_EXPIRATION_KEY     @"linkedin_expiration"
